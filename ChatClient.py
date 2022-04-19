@@ -1,10 +1,10 @@
-```py
 # Server-address:
 # IP address: 143.47.184.219
 # Port number: 5378
 
 import socket
-from threading import Thread
+import threading
+import time
 
 SERVERIP = "143.47.184.219"
 SERVERPORT = 5378 
@@ -15,14 +15,7 @@ def sendMsg(recipient, msg):
     apiMsg = 'SEND {} {}\n'.format(recipient, msg)
     sock.sendall(apiMsg.encode('utf-8'))
 
-    res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
-    if(res == 'SEND-OK\n'):
-        print('Message sent succesfully\n')
-    elif(res == 'UNKNOWN\n'):
-        print('Failed to send message: Unknown recipient\n')
-
 def login():
-    # If busy, say its busy  and do somthing else idk
     usernameAccepted = False
     while not usernameAccepted:
         username = input('Please enter a unique username: ')
@@ -44,28 +37,45 @@ def login():
 
 def printUserList():
     sock.sendall('WHO\n'.encode('utf-8'))
-    res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
-    if(res.split(' ', 1)[0] == 'WHO-OK'):
-        usernames = res.split(' ', 1)[1]
-        print(usernames)
-    else: print('Failed to get userlist from server')
+    
 
-def receiveMessages():
-    pass
+def receiveMessages(): 
+    while(True):
+        res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
+        
+        if(res.split(' ', 1)[0] == 'WHO-OK'):
+            usernames = res.split(' ', 1)[1]
+            print(usernames)
+        elif(res.split(' ', 1)[0] == 'DELIVERY'):
+            print("New Message from ", end = '')
+            sender = res.split(' ', 2)[1]
+            msg = res.split(' ', 2)[2]
+            print(sender,':', msg)
+        elif(res == 'SEND-OK\n'):
+            print('Message sent succesfully\n')
+        elif(res == 'UNKNOWN\n'):
+            print('Failed to send message: Unknown recipient\n')
+        else: print('could not interpret server message')
+
 
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(SERVERADDRESS)
+
+    rec = threading.Thread(target=receiveMessages, daemon=True)
 
     try:
         login()        
 
         running = True
 
+        rec.start()
+
         print("""\nCommands:\n- !who: provides a list of users that are currenty online\n- @<recipient> <message>: send a message to a recipient thats currently online\n- !quit: quit the chat client\n""")
 
         while(running):
-            cmd = input('Command: ')
+            time.sleep(0.1)
+            cmd = input('\nCommand: ')
             if cmd == '!who':
                 printUserList()
             elif cmd[0] == '@':
