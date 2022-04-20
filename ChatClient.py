@@ -1,6 +1,13 @@
 # Server-address:
 # IP address: 143.47.184.219
 # Port number: 5378
+'''
+    - bad request
+    - loop through bytes when requesting
+    - receive_data and check if socket is closed
+    - ' for characters and " for strings
+
+'''
 
 import socket
 import threading
@@ -11,51 +18,56 @@ SERVERPORT = 5378
 SERVERADDRESS = (SERVERIP, SERVERPORT)
 SOCKETLISTENSIZE = 4096
 
+
 def sendMsg(recipient, msg):
-    apiMsg = 'SEND {} {}\n'.format(recipient, msg)
-    sock.sendall(apiMsg.encode('utf-8'))
+    apiMsg = "SEND {} {}\n".format(recipient, msg)
+    sock.sendall(apiMsg.encode("utf-8"))
 
 def login():
     usernameAccepted = False
     while not usernameAccepted:
-        username = input('Please enter a unique username: ')
+        username = input("Please enter a username: ")
 
-        print('Logging in as {}'.format(username))
-
-        req = 'HELLO-FROM {}\n'.format(username)
-        sock.sendall(req.encode('utf-8'))
+        req = "HELLO-FROM {}\n".format(username)
+        sock.sendall(req.encode("utf-8"))
 
         res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
-        if(res == 'IN-USE\n'):
-            print('Username is already in use, please choose another.')
-        elif(res == 'BUSY\n'):
-            print('Server is currently busy, please try again later')
+        if(res == "IN-USE\n"):
+            print("Username is already in use, please choose a different one.")
+        elif(res == "BUSY\n"):
+            print("Server is currently busy, please try again later")
             raise Exception
-        else:
-            print('Login successful')
+        elif(res == "HELLO " + username + '\n'):
+            print("Login successful")
             usernameAccepted = True
+        elif(res == "BAD-RQST-HDR\n" or res == "BAD-RQST-BODY\n"):
+            print("Error. Please try again.")
+        elif(not res):
+            print("Connection terminated. Socket is closed.")
 
 def printUserList():
-    sock.sendall('WHO\n'.encode('utf-8'))
+    sock.sendall("WHO\n".encode("utf-8"))
     
 
 def receiveMessages(): 
     while(True):
         res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
         
-        if(res.split(' ', 1)[0] == 'WHO-OK'):
-            usernames = res.split(' ', 1)[1]
+        if(res.split(" ", 1)[0] == "WHO-OK"):
+            usernames = res.split(" ", 1)[1]
             print(usernames)
-        elif(res.split(' ', 1)[0] == 'DELIVERY'):
-            print("New Message from ", end = '')
-            sender = res.split(' ', 2)[1]
-            msg = res.split(' ', 2)[2]
-            print(sender,':', msg)
-        elif(res == 'SEND-OK\n'):
-            print('Message sent succesfully\n')
-        elif(res == 'UNKNOWN\n'):
-            print('Failed to send message: Unknown recipient\n')
-        else: print('could not interpret server message')
+        elif(res.split(" ", 1)[0] == "DELIVERY"):
+            print("New Message from ", end = "")
+            sender = res.split(" ", 2)[1]
+            msg = res.split(" ", 2)[2]
+            print(sender,":", msg)
+        elif(res == "SEND-OK\n"):
+            print("Message sent succesfully\n")
+        elif(res == "UNKNOWN\n"):
+            print("Failed to send message: Unknown recipient\n")
+        '''else: 
+            print("could not interpret server message")
+            time.sleep(1)'''
 
 
 if __name__ == '__main__':
@@ -75,16 +87,17 @@ if __name__ == '__main__':
 
         while(running):
             time.sleep(0.1)
-            cmd = input('\nCommand: ')
-            if cmd == '!who':
+            cmd = input("\nCommand: ")
+            if cmd == "!who":
                 printUserList()
             elif cmd[0] == '@':
                 recipient = cmd.split()[0][1:]
                 msg = cmd.split(' ', 1)[1]
                 sendMsg(recipient, msg)
-            elif cmd == '!quit':
+            elif cmd == "!quit":
                 running = False
-            else: print('Command unknown')
+                sock.close()
+            else: print("Command unknown")
 
     except OSError as err:
         print(err)
