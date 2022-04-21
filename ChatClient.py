@@ -1,14 +1,3 @@
-# Server-address:
-# IP address: 143.47.184.219
-# Port number: 5378
-'''
-    - bad request
-    - loop through bytes when requesting
-    - receive_data and check if socket is closed
-    - ' for characters and " for strings
-
-'''
-
 import socket
 import threading
 import time
@@ -28,6 +17,7 @@ def login():
     while not usernameAccepted:
         username = input("Please enter a username: ")
 
+        
         req = "HELLO-FROM {}\n".format(username)
         sock.sendall(req.encode("utf-8"))
 
@@ -40,10 +30,23 @@ def login():
         elif(res == "HELLO " + username + '\n'):
             print("Login successful")
             usernameAccepted = True
-        elif(res == "BAD-RQST-HDR\n" or res == "BAD-RQST-BODY\n"):
-            print("Error. Please try again.")
+        elif(res == "BAD-RQST-HDR\n"):
+            print("Error. Contact the administrator.")
+        elif(res == "BAD-RQST-BODY\n"):
+            print("Invalid input. Please try again.")
         elif(not res):
             print("Connection terminated. Socket is closed.")
+            sock.close()
+            connected = False
+            # sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            while not connected:
+                try: 
+                    sock.connect(SERVERADDRESS)
+                    connected = True
+                    print("re-connection successful. Please try again.")
+                except:
+                    time.sleep(2)
+
 
 def printUserList():
     sock.sendall("WHO\n".encode("utf-8"))
@@ -65,9 +68,6 @@ def receiveMessages():
             print("Message sent succesfully\n")
         elif(res == "UNKNOWN\n"):
             print("Failed to send message: Unknown recipient\n")
-        '''else: 
-            print("could not interpret server message")
-            time.sleep(1)'''
 
 
 if __name__ == '__main__':
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         print("""\nCommands:\n- !who: provides a list of users that are currenty online\n- @<recipient> <message>: send a message to a recipient thats currently online\n- !quit: quit the chat client\n""")
 
         while(running):
-            time.sleep(0.1)
+            time.sleep(0.3)
             cmd = input("\nCommand: ")
             if cmd == "!who":
                 printUserList()
