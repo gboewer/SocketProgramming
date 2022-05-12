@@ -1,52 +1,101 @@
 import socket
-import threading
+from _thread import *
 
 HOST = "127.0.0.1"
 PORT = 65432
+MAX_CLIENTS = 64
 
-def listenForConnections():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind((HOST, PORT))
-    sock.listen()
-    while(True):
-        conn, addr = sock.accept()
-        if(len(connections) > 64):
-            print('Cant connect: Number of connections exceeded max')
-        else:
-            connections.append(conn)
-            users.append('')
+usersOnline = []
+connections = []
+
+def handshake(req, conn):
+    reqSplit = req.split(" ", 1)
+    if(len(reqSplit) != 2):
+        raise Exception("BAD-RQST-BODY\n")
+    username = reqSplit[1][:-1]
+    if len(usersOnline) >= MAX_CLIENTS:
+        raise Exception("BUSY\n")
+    
+    for i in range(len(usersOnline)):
+        if(username == usersOnline[i]):
+            raise Exception("IN-USE\n")
+    
+    usersOnline.append(username)
+    res = "HELLO " + username + '\n' 
+
+    conn.send(str.encode(res))
         
-connections = {}
-users = {}
 
-connectThread = threading.Thread(target=listenForConnections)
-connectThread.start()
+def listUsers(conn):
+    list = ''
+    for i in range(len(usersOnline)):
+        list += usersOnline[i] + ','
+    list = list[:-1]
+    res = "WHO-OK " + list + '\n'
+    conn.send(str.encode(res))
 
-def handleCall(msg, connID):
-    if(msg.split(" ", 1)[0] == "HELLO-FROM"):
-        user = msg.split(" ", 1)[1]
-        handshake(connID, user)
-    elif(msg.split(" ", 1)[0] == "WHO\n"):
-        sendUserlist(connID)
-    elif(msg.split(" ", 1)[0] == "SEND"):
-        pass
+def respondSend(req, conn):
+    reqSplit = req.split(" ", 2)
+    if(len(reqSplit) != 3):
+        raise Exception("BAD-RQST-BODY\n")
 
-def handshake(connID, user):
-    users[connID] = user
-    res = 'HELLO {user}'.encode('utf-8')
-    connections[connID].sendall(res)
+    user = reqSplit[1]
+    message = reqSplit[2]
+    found = False
+    for i in range(len(usersOnline)):
+        if user == usersOnline[i]:
+            found = True
+            sendMsg = "DELIVERY " + user + " " + message 
+            receiver = connections[i]
+            receiver.send(str.encode(sendMsg))
+            res = "SEND-OK\n"
+    
+    if not found:
+        raise Exception("UNKNOWN\n")
 
-def sendUserlist(connID):
-    usrListStr = 'WHO-OK '
-    for user in users:
-        usrListStr.append(user + ',')
-    usrListStr = usrListStr[:-1]
-    res = usrListStr.encode('utf-8')
-    connections[connID].sendall(res)
+    conn.send(str.encode(res))
 
-def handleMessage(connID, user, msg):
-    for i in range(len(users)):
-        if(user == users[i]):
-            deliveryMsg = 'DELIVERY {users[connID]} {msg}'
-            res = deliveryMsg.encode('utf-8')
-            connections[i].sendall(res)
+
+def incoming(conn, addr):
+    try:
+        while True:
+            req = conn.recv(4096).decode("utf-8")
+            try: 
+                if(req.split(" ", 1)[0] == "HELLO-FROM"):
+                    connections.append(conn)
+                    handshake(req, conn)
+                elif(req == "WHO\n"):
+                    listUsers(conn)
+                elif(req.split(" ", 1)[0] == "SEND"):
+                    respondSend(req, conn)
+                else:
+                    res = "BAD-RQST-HDR\n" 
+                    conn.send(str.encode(res))
+            
+            except Exception as errorMsg:
+                conn.send(str.encode(str(errorMsg)))
+    
+    except BrokenPipeError:
+        for i in range(len(connections)):
+            if conn == connections[i]:
+                break
+
+        usersOnline.pop(i)
+        connections.pop(i)
+        conn.close()
+
+if __name__ == '__main__':
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+    
+    try:
+        s.bind((HOST,PORT))
+    except socket.error as e:
+        print(str(e))
+    print("Socket is listening...")
+    s.listen()
+
+    while True:
+        conn, addr = s.accept()
+        start_new_thread(incoming, (conn, addr))
+
+    s.close()
