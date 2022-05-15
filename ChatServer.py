@@ -36,16 +36,17 @@ def listUsers(conn):
 
 def respondSend(req, conn):
     reqSplit = req.split(" ", 2)
-    if(len(reqSplit) != 3):
-        raise Exception("BAD-RQST-BODY\n")
-
     user = reqSplit[1]
     message = reqSplit[2]
     found = False
     for i in range(len(usersOnline)):
         if user == usersOnline[i]:
             found = True
-            sendMsg = "DELIVERY " + user + " " + message 
+            for j in range(len(connections)):
+                if conn == connections[j]:
+                    sender = usersOnline[j]
+                    break
+            sendMsg = "DELIVERY " + sender + " " + message 
             receiver = connections[i]
             receiver.send(str.encode(sendMsg))
             res = "SEND-OK\n"
@@ -60,7 +61,14 @@ def incoming(conn, addr):
     try:
         while True:
             req = conn.recv(4096).decode("utf-8")
-            try: 
+            try:
+                if(req[0] == 'S'):
+                    count = 0
+                    for i in range(len(req)):
+                        if req[i] == " ":
+                            count += 1
+                    if(count < 2):
+                        raise Exception("BAD-RQST-BODY\n")
                 if(req.split(" ", 1)[0] == "HELLO-FROM"):
                     connections.append(conn)
                     handshake(req, conn)

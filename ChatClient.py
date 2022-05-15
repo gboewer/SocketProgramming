@@ -27,10 +27,11 @@ def receiveMessages():
             usernames = res.split(" ", 1)[1]
             print(usernames)
         elif(res.split(" ", 1)[0] == "DELIVERY"):
-            print("New Message from ", end = "")
+            print("\rNew Message from ", end = "")
             sender = res.split(" ", 2)[1]
             msg = res.split(" ", 2)[2]
             print(sender,":", msg)
+            print("\nCommand: ")
         elif(res == "SEND-OK\n"):
             print("Message sent succesfully\n")
         elif(res == "UNKNOWN\n"):
@@ -52,6 +53,7 @@ if __name__ == '__main__':
             sock.sendall(req.encode("utf-8"))
 
             res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
+
             if(res == "IN-USE\n"):
                 print("Username is already in use, please choose a different one.")
                 sock.close()
@@ -79,14 +81,21 @@ if __name__ == '__main__':
         print("""\nCommands:\n- !who: provides a list of users that are currenty online\n- @<recipient> <message>: send a message to a recipient thats currently online\n- !quit: quit the chat client\n""")
 
         while(running):
-            time.sleep(0.3)
+            time.sleep(0.1)
             cmd = input("\nCommand: ")
             if cmd == "!who":
                 printUserList()
             elif cmd[0] == '@':
-                recipient = cmd.split()[0][1:]
-                msg = cmd.split(' ', 1)[1]
-                sendMsg(recipient, msg)
+                count = 0
+                for i in range(len(cmd)):
+                    if cmd[i] == " ":
+                        count += 1
+                if(count < 1):
+                    print("Invalid input. Please try again.")
+                else:
+                    recipient = cmd.split()[0][1:]
+                    msg = cmd.split(' ', 1)[1]
+                    sendMsg(recipient, msg)
             elif cmd == "!quit":
                 running = False
                 sock.close()
