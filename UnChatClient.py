@@ -1,5 +1,4 @@
 # ToDO
-# change send and receive syntax to match UDP
 # guaranteed delivery with acks
 # make server resend data if error was detected
 
@@ -11,8 +10,8 @@ SERVERIP = "143.47.184.219"
 SERVERPORT = 5382
 SERVERADDRESS = (SERVERIP, SERVERPORT)
 SOCKETLISTENSIZE = 4096
-SOCKETSEND = 1024
 KEY = "0011"
+sequenceNumbers = [0,1]
 
 def sendMsg(recipient, msg):
     keyLen = len(KEY)
@@ -23,8 +22,29 @@ def sendMsg(recipient, msg):
 
     result = binary + remainder
 
-    apiMsg = "SEND {} {}\n".format(recipient, result)
-    sock.sendto(apiMsg.encode(), SERVERADDRESS)
+    apiMsg = "SEND {} {}\n".format(recipient, msg)
+
+    ack = False
+
+    while not ack:
+        sock.sendto(apiMsg.encode(), SERVERADDRESS)
+        res = sock.recvfrom(SOCKETLISTENSIZE)
+        
+        msg = str(res)
+        split = msg.split("'", 2)
+        msg = split[1]
+        msg = msg[:-2]
+        res = msg + '\n'
+        msg = res.split(" ", 2)[2]
+
+        # print("DEBUG\n", msg)
+
+        if(msg == " ack"):
+            ack = True
+        time.sleep(1)
+
+    print("Message transmitted successfully")
+    
 
 def xor(a,b):
     result = []
@@ -59,11 +79,33 @@ def mod(divident, divisor):
 
 
 def printUserList():
-    sock.sendall("WHO\n".encode("utf-8"))  
+    sock.sendto(str.encode("WHO\n"), SERVERADDRESS)
+
+def errorDetection(msg, sender):
+    '''
+    keyLen = len(KEY)
+
+    appendZero = msg + '0'*(keyLen-1)
+    remainder = mod(appendZero, KEY)
+
+    noError = "0" * (len(KEY) - 1)
+
+    if remainder == noError:'''
+    ackn = "SEND {} ack \n".format(sender)
+    sock.sendto(str.encode(ackn), SERVERADDRESS)
+    # send acknowledgement with sequence number
+    # if sequence number is not the highest, safe message in buffer
 
 def receiveMessages(): 
     while(True):
-        res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
+        res = sock.recvfrom(SOCKETLISTENSIZE)
+
+        msg = str(res)
+        split = msg.split("'", 2)
+        msg = split[1]
+        msg = msg[:-2]
+        res = msg + '\n'
+        # print("Server response: ", res)
         
         if(res.split(" ", 1)[0] == "WHO-OK"):
             usernames = res.split(" ", 1)[1]
@@ -71,66 +113,78 @@ def receiveMessages():
         elif(res.split(" ", 1)[0] == "DELIVERY"):
             sender = res.split(" ", 2)[1]
             msg = res.split(" ", 2)[2]
-            errorDetection(msg)
-            print("\rNew Message from ", end = "")
-            print(sender,":", msg)
-            print("\nCommand: ")
+            if(msg == " ack"):
+                print("acknowledged")
+            else:
+                errorDetection(msg, sender)
+                print("\rNew Message from ", end = "")
+                print(sender,":", msg)
+                print("\nCommand: ")
         elif(res == "SEND-OK\n"):
             print("Message sent succesfully\n")
         elif(res == "UNKNOWN\n"):
             print("Failed to send message: Unknown recipient\n")
 
-def errorDetection(msg):
-    keyLen = len(KEY)
-
-    appendZero = msg.decode() + '0'*(keyLen-1)
-    remainder = mod(appendZero, KEY)
-
-    noError = "0" * (len(KEY) - 1)
-
-    if remainder == noError:
-        print("No error")
-    else:
-        print("Error")
-        # ask server to resend data
-
 
 def configure():
+    '''
     print("Server Configuration\n")
     drop = input("Please enter drop: ") # message drop probability between 0 and 1
     drop = "SET DROP {}\n".format(drop)
-    sock.sendall(drop.encode("utf-8"))
+    sock.sendto(str.encode(drop), SERVERADDRESS)
 
     flip = input("Please enter flip: ")
     flip = "SET FLIP {}\n".format(flip) # bit flip probability between 0 and 1
-    sock.sendall(flip.encode("utf-8"))
+    sock.sendto(str.encode(flip), SERVERADDRESS)
 
     burst = input("Please enter burst: ")
     burst = "SET BURST {}\n".format(burst) # burst error probability
-    sock.sendall(burst.encode("utf-8"))
+    sock.sendto(str.encode(burst), SERVERADDRESS)
 
     bLen = input("Please enter burst length: ")
     bLen = "SET BURST-LEN {}\n".format(bLen) # burst error length; default is 3
-    sock.sendall(bLen.encode("utf-8"))
+    sock.sendto(str.encode(bLen), SERVERADDRESS)
 
     delay = input("Please enter delay probability: ")
     delay = "SET DELAY {}\n".format(delay) # message delay probability
-    sock.sendall(delay.encode("utf-8"))
+    sock.sendto(str.encode(delay), SERVERADDRESS)
 
     dLen = input("Please enter delay length: ")
     dLen = "SET DELAY-LEN {}\n".format(dLen) # delay length in seconds; default is 5
-    sock.sendall(dLen.encode("utf-8"))
-
-    '''
+    sock.sendto(str.encode(dLen), SERVERADDRESS)
+    
     setting = "DROP"
     req = "GET {}\n".format(setting)
-    sock.sendall(req.encode("utf-8"))
-    res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
+    sock.sendto(str.encode(req), SERVERADDRESS)
+    res = sock.recvfrom(SOCKETLISTENSIZE)
     print("Current setting: ", res)
     '''
+    drop = 0
+    drop = "SET DROP {}\n".format(drop) # message drop probability between 0 and 1
+    sock.sendto(str.encode(drop), SERVERADDRESS)
+
+    flip = 0
+    flip = "SET FLIP {}\n".format(flip) # bit flip probability between 0 and 1
+    sock.sendto(str.encode(flip), SERVERADDRESS)
+
+    burst = 0
+    burst = "SET BURST {}\n".format(burst) # burst error probability
+    sock.sendto(str.encode(burst), SERVERADDRESS)
+
+    bLen = 3
+    bLen = "SET BURST-LEN {}\n".format(bLen) # burst error length; default is 3
+    sock.sendto(str.encode(bLen), SERVERADDRESS)
+
+    delay = 0
+    delay = "SET DELAY {}\n".format(delay) # message delay probability
+    sock.sendto(str.encode(delay), SERVERADDRESS)
+
+    dLen = 2
+    dLen = "SET DELAY-LEN {}\n".format(dLen) # delay length in seconds; default is 5
+    sock.sendto(str.encode(dLen), SERVERADDRESS)
 
 def reset():
-    sock.sendall("RESET\n".encode("utf-8"))
+    sock.sendto(str.encode("RESET\n"), SERVERADDRESS)
 
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -144,18 +198,20 @@ if __name__ == '__main__':
             username = input("Please enter a username: ")
 
             req = "HELLO-FROM {}\n".format(username)
-            # sock.sendall(req.encode("utf-8"))
             sock.sendto(str.encode(req), SERVERADDRESS)
 
-            # res = sock.recv(SOCKETLISTENSIZE).decode("utf-8")
             res = sock.recvfrom(SOCKETLISTENSIZE)
-
-            print("Server response: ", res)
+            
+            msg = str(res)
+            split = msg.split("'", 2)
+            msg = split[1]
+            msg = msg[:-2]
+            res = msg + '\n'
 
             if(res == "IN-USE\n"):
                 print("Username is already in use, please choose a different one.")
                 sock.close()
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 sock.connect(SERVERADDRESS)
             elif(res == "BUSY\n"):
                 print("Server is currently busy, please try again later")
@@ -171,6 +227,8 @@ if __name__ == '__main__':
                 print("Connection terminated. Socket is closed.")
                 sock.close()
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            else:
+                print("Problem logging in occured. Please try again.")
 
         running = True
 
