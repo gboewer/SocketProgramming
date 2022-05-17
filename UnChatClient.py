@@ -1,6 +1,6 @@
 # ToDO
 # guaranteed delivery with acks
-# make server resend data if error was detected
+# implement sequence numbers
 
 import socket
 import threading
@@ -12,6 +12,7 @@ SERVERADDRESS = (SERVERIP, SERVERPORT)
 SOCKETLISTENSIZE = 4096
 KEY = "0011"
 sequenceNumbers = [0,1]
+ack = 0
 
 def sendMsg(recipient, msg):
     keyLen = len(KEY)
@@ -24,24 +25,25 @@ def sendMsg(recipient, msg):
 
     apiMsg = "SEND {} {}\n".format(recipient, msg)
 
-    ack = False
 
-    while not ack:
+    while ack == 0:
         sock.sendto(apiMsg.encode(), SERVERADDRESS)
         res = sock.recvfrom(SOCKETLISTENSIZE)
+
+        temp = str(res)
+        split = temp.split("'", 2)
+        temp = split[1]
+        temp = temp[:-2]
+        res = temp + '\n'
         
-        msg = str(res)
-        split = msg.split("'", 2)
-        msg = split[1]
-        msg = msg[:-2]
-        res = msg + '\n'
-        msg = res.split(" ", 2)[2]
+        if(res.split(" ", 1)[0] == "DELIVERY"):
+            response = res.split(" ", 2)[2]
+            if(response == "ack\n"):
+                print("acknowledged")
+                
+        ack = 1
 
-        # print("DEBUG\n", msg)
-
-        if(msg == " ack"):
-            ack = True
-        time.sleep(1)
+        time.sleep(0.1)
 
     print("Message transmitted successfully")
     
@@ -91,7 +93,7 @@ def errorDetection(msg, sender):
     noError = "0" * (len(KEY) - 1)
 
     if remainder == noError:'''
-    ackn = "SEND {} ack \n".format(sender)
+    ackn = "SEND {} ack\n".format(sender)
     sock.sendto(str.encode(ackn), SERVERADDRESS)
     # send acknowledgement with sequence number
     # if sequence number is not the highest, safe message in buffer
@@ -113,15 +115,16 @@ def receiveMessages():
         elif(res.split(" ", 1)[0] == "DELIVERY"):
             sender = res.split(" ", 2)[1]
             msg = res.split(" ", 2)[2]
-            if(msg == " ack"):
-                print("acknowledged")
+            if(msg == "ack\n"):
+                print("acknowledged from listening thread")
             else:
                 errorDetection(msg, sender)
                 print("\rNew Message from ", end = "")
                 print(sender,":", msg)
                 print("\nCommand: ")
         elif(res == "SEND-OK\n"):
-            print("Message sent succesfully\n")
+            a = 1
+            # print("Message sent succesfully\n")
         elif(res == "UNKNOWN\n"):
             print("Failed to send message: Unknown recipient\n")
 
