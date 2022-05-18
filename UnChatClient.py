@@ -1,18 +1,17 @@
 # ToDO
-# guaranteed delivery with acks
-# implement sequence numbers
+# guaranteed delivery with acks -> queue: put messages in queue and send as long as there is an item in the queue
 
 import socket
 import threading
 import time
+import queue
 
 SERVERIP = "143.47.184.219"
 SERVERPORT = 5382
 SERVERADDRESS = (SERVERIP, SERVERPORT)
 SOCKETLISTENSIZE = 4096
 KEY = "0011"
-sequenceNumbers = [0,1]
-ack = 0
+q = queue.Queue()
 
 def sendMsg(recipient, msg):
     keyLen = len(KEY)
@@ -25,27 +24,15 @@ def sendMsg(recipient, msg):
 
     apiMsg = "SEND {} {}\n".format(recipient, msg)
 
+    q.put(apiMsg)
 
-    while ack == 0:
+    while q.qsize() != 0:
+        apiMsg = q.get()
         sock.sendto(apiMsg.encode(), SERVERADDRESS)
-        res = sock.recvfrom(SOCKETLISTENSIZE)
-
-        temp = str(res)
-        split = temp.split("'", 2)
-        temp = split[1]
-        temp = temp[:-2]
-        res = temp + '\n'
-        
-        if(res.split(" ", 1)[0] == "DELIVERY"):
-            response = res.split(" ", 2)[2]
-            if(response == "ack\n"):
-                print("acknowledged")
-                
-        ack = 1
 
         time.sleep(0.1)
 
-    print("Message transmitted successfully")
+    # print("Message transmitted successfully")
     
 
 def xor(a,b):
@@ -87,7 +74,7 @@ def errorDetection(msg, sender):
     '''
     keyLen = len(KEY)
 
-    appendZero = msg + '0'*(keyLen-1)
+    appendZero = msg.decode() + '0'*(keyLen-1) # decode data
     remainder = mod(appendZero, KEY)
 
     noError = "0" * (len(KEY) - 1)
@@ -95,8 +82,6 @@ def errorDetection(msg, sender):
     if remainder == noError:'''
     ackn = "SEND {} ack\n".format(sender)
     sock.sendto(str.encode(ackn), SERVERADDRESS)
-    # send acknowledgement with sequence number
-    # if sequence number is not the highest, safe message in buffer
 
 def receiveMessages(): 
     while(True):
@@ -116,52 +101,20 @@ def receiveMessages():
             sender = res.split(" ", 2)[1]
             msg = res.split(" ", 2)[2]
             if(msg == "ack\n"):
-                print("acknowledged from listening thread")
+                q.task_done()
+                print("acknowledged")
             else:
                 errorDetection(msg, sender)
                 print("\rNew Message from ", end = "")
                 print(sender,":", msg)
                 print("\nCommand: ")
         elif(res == "SEND-OK\n"):
-            a = 1
-            # print("Message sent succesfully\n")
+            pass
         elif(res == "UNKNOWN\n"):
             print("Failed to send message: Unknown recipient\n")
 
 
 def configure():
-    '''
-    print("Server Configuration\n")
-    drop = input("Please enter drop: ") # message drop probability between 0 and 1
-    drop = "SET DROP {}\n".format(drop)
-    sock.sendto(str.encode(drop), SERVERADDRESS)
-
-    flip = input("Please enter flip: ")
-    flip = "SET FLIP {}\n".format(flip) # bit flip probability between 0 and 1
-    sock.sendto(str.encode(flip), SERVERADDRESS)
-
-    burst = input("Please enter burst: ")
-    burst = "SET BURST {}\n".format(burst) # burst error probability
-    sock.sendto(str.encode(burst), SERVERADDRESS)
-
-    bLen = input("Please enter burst length: ")
-    bLen = "SET BURST-LEN {}\n".format(bLen) # burst error length; default is 3
-    sock.sendto(str.encode(bLen), SERVERADDRESS)
-
-    delay = input("Please enter delay probability: ")
-    delay = "SET DELAY {}\n".format(delay) # message delay probability
-    sock.sendto(str.encode(delay), SERVERADDRESS)
-
-    dLen = input("Please enter delay length: ")
-    dLen = "SET DELAY-LEN {}\n".format(dLen) # delay length in seconds; default is 5
-    sock.sendto(str.encode(dLen), SERVERADDRESS)
-    
-    setting = "DROP"
-    req = "GET {}\n".format(setting)
-    sock.sendto(str.encode(req), SERVERADDRESS)
-    res = sock.recvfrom(SOCKETLISTENSIZE)
-    print("Current setting: ", res)
-    '''
     drop = 0
     drop = "SET DROP {}\n".format(drop) # message drop probability between 0 and 1
     sock.sendto(str.encode(drop), SERVERADDRESS)
