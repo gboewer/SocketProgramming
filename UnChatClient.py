@@ -1,6 +1,3 @@
-# ToDO
-# guaranteed delivery with acks -> queue: put messages in queue and send as long as there is an item in the queue
-
 import socket
 import threading
 import time
@@ -10,29 +7,39 @@ SERVERIP = "143.47.184.219"
 SERVERPORT = 5382
 SERVERADDRESS = (SERVERIP, SERVERPORT)
 SOCKETLISTENSIZE = 4096
-KEY = "0011"
+KEY = "1011"
 q = queue.Queue()
+# timeout = time.time() + 20
 
 def sendMsg(recipient, msg):
-    keyLen = len(KEY)
     binary = (''.join(format(ord(x), 'b') for x in msg))
 
-    appendZero = binary + '0'*(keyLen-1)
+    appendZero = binary + "000"
     remainder = mod(appendZero, KEY)
 
     result = binary + remainder
+    # print("Binary msg sent: ", result)
 
-    apiMsg = "SEND {} {}\n".format(recipient, msg)
+    apiMsg = "SEND {} {}\n".format(recipient, result)
 
     q.put(apiMsg)
+    resend()
 
-    while q.qsize() != 0:
+def resend():
+    while not q.empty():
+        '''
+        if time.time() > timeout:
+            q.get()
+            q.task_done()
+            print("Unable to send message. Try again.")
+            break'''
         apiMsg = q.get()
-        sock.sendto(apiMsg.encode(), SERVERADDRESS)
+        q.put(apiMsg)
+        sock.sendto(str.encode(apiMsg), SERVERADDRESS)
 
         time.sleep(0.1)
-
-    # print("Message transmitted successfully")
+        # print("Items in queue: ", q.qsize())
+    # print("Unable to send message. Try again.")
     
 
 def xor(a,b):
@@ -66,22 +73,36 @@ def mod(divident, divisor):
     codeword = temp
     return codeword
 
-
 def printUserList():
-    sock.sendto(str.encode("WHO\n"), SERVERADDRESS)
+    apiMsg = "WHO\n"
+    q.put(apiMsg)
+    resend()
 
 def errorDetection(msg, sender):
-    '''
-    keyLen = len(KEY)
-
-    appendZero = msg.decode() + '0'*(keyLen-1) # decode data
+    for i in range (0, len(msg)):
+        if msg[i] == '0' or msg[i] == '1' or msg[i] == ' ' or msg[i] == '\n':
+            a = 0
+        else:
+            return False
+        
+    appendZero = msg + "000" 
     remainder = mod(appendZero, KEY)
 
-    noError = "0" * (len(KEY) - 1)
+    noError = "011" 
 
-    if remainder == noError:'''
-    ackn = "SEND {} ack\n".format(sender)
-    sock.sendto(str.encode(ackn), SERVERADDRESS)
+    if remainder == noError:
+        ackn = "SEND {} ack\n".format(sender)
+        sock.sendto(str.encode(ackn), SERVERADDRESS)
+        # print("No Error detected")
+        return True
+    else:
+        # print("Error detected")
+        return False
+
+def BinaryToDecimal(binary):
+	string = int(binary, 2)
+	
+	return string
 
 def receiveMessages(): 
     while(True):
@@ -92,51 +113,76 @@ def receiveMessages():
         msg = split[1]
         msg = msg[:-2]
         res = msg + '\n'
+
         # print("Server response: ", res)
         
         if(res.split(" ", 1)[0] == "WHO-OK"):
+            q.get()
+            q.task_done()
             usernames = res.split(" ", 1)[1]
             print(usernames)
         elif(res.split(" ", 1)[0] == "DELIVERY"):
-            sender = res.split(" ", 2)[1]
-            msg = res.split(" ", 2)[2]
-            if(msg == "ack\n"):
-                q.task_done()
-                print("acknowledged")
-            else:
-                errorDetection(msg, sender)
-                print("\rNew Message from ", end = "")
-                print(sender,":", msg)
-                print("\nCommand: ")
+            count = 0
+            for i in range (0, len(res)):
+                if res[i] == " ":
+                    count += 1
+            if count > 1:
+                sender = res.split(" ", 2)[1]
+                msg = res.split(" ", 2)[2]
+                if(msg == "ack\n"):
+                    q.get()
+                    q.task_done()
+                    # print("acknowledged")
+                else:
+                    noError = errorDetection(msg, sender)
+                    if noError:
+                        str_data =' '
+                        msg = msg[:-3]
+                        # print("Binary msg received: ", msg)
+                        i = 0
+                        while i < len(msg):
+                            temp_data = msg[i:i + 7]
+                            if temp_data[:-1] == "100000":
+                                str_data = str_data + ' '
+                                i += 6
+                            else:
+                                decimal_data = BinaryToDecimal(temp_data)
+                                str_data = str_data + chr(decimal_data)
+                                i += 7
+
+                        print("\rNew Message from ", end = "")
+                        print(sender,":", str_data)
+                        print("\nCommand: ")
         elif(res == "SEND-OK\n"):
             pass
         elif(res == "UNKNOWN\n"):
             print("Failed to send message: Unknown recipient\n")
 
-
 def configure():
-    drop = 0
+    drop = 0.001
     drop = "SET DROP {}\n".format(drop) # message drop probability between 0 and 1
     sock.sendto(str.encode(drop), SERVERADDRESS)
 
-    flip = 0
+    flip = 0.001
     flip = "SET FLIP {}\n".format(flip) # bit flip probability between 0 and 1
     sock.sendto(str.encode(flip), SERVERADDRESS)
 
-    burst = 0
+    burst = 0.001
     burst = "SET BURST {}\n".format(burst) # burst error probability
     sock.sendto(str.encode(burst), SERVERADDRESS)
 
-    bLen = 3
-    bLen = "SET BURST-LEN {}\n".format(bLen) # burst error length; default is 3
+    bUpper = 3
+    bLower = 0
+    bLen = "SET BURST-LEN {} {}\n".format(bLower, bUpper) # burst error length; default is 3
     sock.sendto(str.encode(bLen), SERVERADDRESS)
 
-    delay = 0
+    delay = 0.01
     delay = "SET DELAY {}\n".format(delay) # message delay probability
     sock.sendto(str.encode(delay), SERVERADDRESS)
 
-    dLen = 2
-    dLen = "SET DELAY-LEN {}\n".format(dLen) # delay length in seconds; default is 5
+    dUpper = 5
+    dLower = 0
+    dLen = "SET DELAY-LEN {} {}\n".format(dLower, dUpper) # delay length in seconds; default is 5
     sock.sendto(str.encode(dLen), SERVERADDRESS)
 
 def reset():
@@ -213,10 +259,6 @@ if __name__ == '__main__':
             elif cmd == "!quit":
                 running = False
                 sock.close()
-            elif cmd == "!configure":
-                configure()
-            elif cmd == "!reset":
-                reset()
             else: print("Command unknown")
 
     except OSError as err:
