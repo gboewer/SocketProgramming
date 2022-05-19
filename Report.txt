@@ -1,0 +1,6 @@
+After establishing a connection, the bot sends a REPORT command to the server, to report a new system has been compromised. It includes its id and the operating system it is based in. Every message ends with <END>. The server responds with a HELLO command to let the bot know the handshake has succeeded. The bot checks with the server if it has the correct version by sending "UPDATE <version>", if the bot is uptodate, the server sends "UPDATE none" back. After the bot is uptodate, it sends "COMMAND" without an argument to the server to signalize that it is ready to receive commands. The server will the send commands to the bot. They end the communication with the bot sending BYE and the server responding END.
+
+a) IP-Address: 18.185.130.53, Port: 46910
+b) TCP
+c) 1.33.7
+d) get_credentials, spam, drop, ddos
