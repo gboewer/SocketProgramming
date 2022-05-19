@@ -79,16 +79,15 @@ def printUserList():
     resend()
 
 def errorDetection(msg, sender):
+    msg = msg[:-1]
     for i in range (0, len(msg)):
-        if msg[i] == '0' or msg[i] == '1' or msg[i] == ' ' or msg[i] == '\n':
-            a = 0
+        if msg[i] == '0' or msg[i] == '1':
+            pass
         else:
             return False
         
-    appendZero = msg + "000" 
-    remainder = mod(appendZero, KEY)
-
-    noError = "011" 
+    remainder = mod(msg, KEY)
+    noError = "000" 
 
     if remainder == noError:
         ackn = "SEND {} ack\n".format(sender)
@@ -104,7 +103,8 @@ def BinaryToDecimal(binary):
 	
 	return string
 
-def receiveMessages(): 
+def receiveMessages():
+    lastMsg = "" 
     while(True):
         res = sock.recvfrom(SOCKETLISTENSIZE)
 
@@ -135,9 +135,8 @@ def receiveMessages():
                     # print("acknowledged")
                 else:
                     noError = errorDetection(msg, sender)
-                    if noError:
+                    if noError and msg != lastMsg:
                         str_data =' '
-                        msg = msg[:-3]
                         # print("Binary msg received: ", msg)
                         i = 0
                         while i < len(msg):
@@ -149,25 +148,26 @@ def receiveMessages():
                                 decimal_data = BinaryToDecimal(temp_data)
                                 str_data = str_data + chr(decimal_data)
                                 i += 7
-
+                        lastMsg = msg
                         print("\rNew Message from ", end = "")
                         print(sender,":", str_data)
                         print("\nCommand: ")
         elif(res == "SEND-OK\n"):
             pass
         elif(res == "UNKNOWN\n"):
-            print("Failed to send message: Unknown recipient\n")
+            pass
+            # print("Failed to send message: Unknown recipient\n")
 
 def configure():
-    drop = 0.001
+    drop = 0.3
     drop = "SET DROP {}\n".format(drop) # message drop probability between 0 and 1
     sock.sendto(str.encode(drop), SERVERADDRESS)
 
-    flip = 0.001
+    flip = 0.002
     flip = "SET FLIP {}\n".format(flip) # bit flip probability between 0 and 1
     sock.sendto(str.encode(flip), SERVERADDRESS)
 
-    burst = 0.001
+    burst = 0.002
     burst = "SET BURST {}\n".format(burst) # burst error probability
     sock.sendto(str.encode(burst), SERVERADDRESS)
 
@@ -176,7 +176,7 @@ def configure():
     bLen = "SET BURST-LEN {} {}\n".format(bLower, bUpper) # burst error length; default is 3
     sock.sendto(str.encode(bLen), SERVERADDRESS)
 
-    delay = 0.01
+    delay = 0.3
     delay = "SET DELAY {}\n".format(delay) # message delay probability
     sock.sendto(str.encode(delay), SERVERADDRESS)
 
